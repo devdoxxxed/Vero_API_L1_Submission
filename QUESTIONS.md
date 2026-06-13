@@ -1,127 +1,131 @@
-# Questions
+## Java & Object-Oriented Design
 
-Answer each question in your own words. Aim for three to eight sentences per answer —
-enough to show that you understand the concept, not so much that you are restating a
-textbook entry. We are looking for clarity of thinking, not exhaustive coverage.
+### 1.
+
+`@MappedSuperclass` tells JPA that the fields in the abstract class should be inherited by entity classes and mapped into their database tables. The superclass itself does not get its own table. If the annotation were removed, JPA would no longer automatically map those inherited fields, and entities extending the class would lose those columns unless they were redeclared.
+
+Using a shared `Auditable` class avoids duplication and ensures that all entities use a consistent auditing model. It also makes future changes easier because audit-related modifications only need to be made in one place.
 
 ---
 
-## Java & Object-Oriented Design
+### 2.
 
-**1.** The `Auditable` abstract class in this codebase uses `@MappedSuperclass`. Explain
-what this annotation tells JPA, and describe what would happen to the database schema if
-you removed it. Why is it better to put `createdAt` and `updatedAt` in a shared abstract
-class rather than adding those fields directly to `Transaction` and `Account` separately?
+Even with only one implementation today, the interface defines a contract that separates consumers from implementation details. This improves maintainability and testability.
 
+A concrete example is introducing a new implementation that reads data from an external service or a cache layer. Controllers and other consumers would not need to change because they depend on the interface rather than a specific implementation.
 
+---
 
-**2.** `TransactionService` is defined as a Java interface, with `TransactionServiceImpl`
-as its only implementation. A new engineer on the team asks: "Why bother with the interface
-if there's only one implementation? Isn't it just extra boilerplate?" How do you respond?
-Give at least one concrete scenario where the interface pays off.
+### 3.
 
+Using `@Enumerated(EnumType.STRING)` stores the enum name as text in the database, such as `FOOD`, `TRANSPORT`, or `SHOPPING`.
 
+This is preferable to ordinal storage because the values remain readable and are not affected by enum ordering changes. If a developer adds a new category without considering existing data or migration requirements, application logic may not handle the new value correctly, potentially causing reporting or validation issues.
 
-**3.** `Category` is modelled as an enum rather than a plain `String` field on
-`Transaction`. What does storing it as `@Enumerated(EnumType.STRING)` in the database
-actually produce in the table? What would go wrong if a future developer added a new
-category value to the enum but forgot to handle database migration?
+---
 
+### 4.
 
+This is a utility-class pattern. The class is marked `final` and has a private constructor so it cannot be instantiated or extended.
 
-**4.** `BudgetCalculator` is a `final` class with a private constructor and a single
-static method. What pattern is this, and why is it appropriate for this specific utility?
-In your implementation, what data structure did you use as an intermediate step before
-building the final sorted map, and why?
-
-
+For the implementation, I grouped transactions by category and aggregated totals before sorting them. The final result was collected into a `LinkedHashMap` because insertion order is preserved after sorting, allowing the top spending categories to remain in descending order.
 
 ---
 
 ## Spring Boot & REST API Design
 
-**5.** The original `POST /api/transactions` endpoint returned a `ResponseEntity<Transaction>`
-rather than a `ResponseEntity<TransactionResponse>`. Explain specifically what was wrong
-with this. What does a DTO (data transfer object) protect against, and what risks does
-returning an entity directly introduce?
+### 5.
 
+Returning an entity directly exposes the persistence model to API consumers. This creates tight coupling between database structure and API contracts.
 
+A DTO provides a controlled representation of the data that is safe to expose externally. It prevents accidental exposure of internal fields and allows the API to evolve independently of database entities.
 
-**6.** When a `POST` request arrives at `TransactionController`, describe the complete
-journey from HTTP request to database insert. Name each layer the request passes through,
-what each layer is responsible for, and what would happen if the `@Valid` annotation were
-removed from the method parameter.
+---
 
+### 6.
 
+The request first reaches the controller through Spring MVC routing. The controller receives the JSON payload and uses validation annotations to validate the request object. The controller then delegates to the service layer, which contains business logic. The service creates a transaction entity and passes it to the repository. The repository interacts with JPA and Hibernate, which generate SQL and persist the record in the database.
 
-**7.** Spring Boot uses `@RestController`, `@Service`, and `@Repository` as stereotype
-annotations. They all ultimately do the same thing (register a bean). Why does Spring
-provide three different annotations instead of one? What does the distinction communicate
-to a developer reading the code?
+If `@Valid` were removed, invalid requests could reach the service layer, potentially allowing incomplete or incorrect data to be persisted.
 
+---
 
+### 7.
 
-**8.** The `GET /api/transactions/monthly-spend` endpoint accepts `year` and `month` as
-query parameters. What HTTP status code should this endpoint return if `month=13` is
-passed? Who is responsible for validating it — the controller, the service, or Spring
-itself — and how would you implement that validation?
+All three annotations register Spring beans, but they communicate intent. `@RestController` indicates web-layer functionality, `@Service` indicates business logic, and `@Repository` indicates data access.
 
+This separation improves readability and helps developers understand responsibilities quickly when navigating the codebase.
 
+---
+
+### 8.
+
+The endpoint should return HTTP 400 Bad Request because the request contains invalid input.
+
+Validation can be implemented using Spring validation annotations or explicit checks in the controller or service layer. I would validate that the month is between 1 and 12 and return a clear validation error message when the value is invalid.
 
 ---
 
 ## Data Access & SQL
 
-**9.** `TransactionRepository` extends `JpaRepository<Transaction, Long>`. Spring Data JPA
-can generate a query from a method named `findByAccountId`. Explain the mechanism behind
-this — what is Spring doing at startup to turn that method name into SQL? When would you
-write a `@Query` annotation instead of relying on derived query methods?
+### 9.
 
+At startup, Spring Data JPA parses repository method names and generates query implementations automatically. The framework recognizes patterns such as `findByAccountId` and translates them into SQL based on entity metadata.
 
+I would use `@Query` when the query becomes too complex for derived method names or when custom joins, aggregations, or database-specific functionality are required.
 
-**10.** `calculateMonthlySpend` had a bug in the date boundary comparison. Describe the
-bug in plain language — what was the incorrect behaviour, what caused it at the code level,
-and what kind of test input reliably exposes this class of off-by-one error? Why is this
-type of bug particularly common in date/time logic?
+---
 
+### 10.
 
+The bug excluded transactions occurring on the first day of the month. The implementation used `isAfter(startOfMonth)`, which only includes dates strictly after the first day.
 
-**11.** The application uses H2 in-memory for development. Describe exactly what you
-would change to point this application at a PostgreSQL database in production. Be specific:
-which files, which properties, and which Maven dependency. What is the risk of using
-`spring.jpa.hibernate.ddl-auto=create-drop` in production?
+The issue became visible when a transaction occurred exactly on the first day of the month. Boundary-value test cases are effective at exposing this type of defect. Date and time logic frequently suffers from off-by-one errors because developers must carefully distinguish between inclusive and exclusive comparisons.
 
+---
 
+### 11.
+
+For PostgreSQL, I would replace the H2 dependency in `pom.xml` with the PostgreSQL JDBC driver and update `application.properties` with PostgreSQL connection details, username, password, and dialect configuration.
+
+Using `spring.jpa.hibernate.ddl-auto=create-drop` in production is dangerous because it can recreate or delete schema objects and lead to data loss. In production, schema migrations should be managed through tools such as Flyway or Liquibase.
 
 ---
 
 ## Testing
 
-**12.** `TransactionServiceTest` uses `@Mock` on `TransactionRepository` and
-`@InjectMocks` on `TransactionServiceImpl`. Explain what Mockito is doing here. What is
-the repository being replaced with, and what does the test actually verify? What category
-of bug can this test suite catch — and what category can it not?
+### 12.
 
+Mockito replaces the repository with a mock object rather than using a real database. The service under test receives this mock through dependency injection.
 
+The tests verify business logic in isolation by controlling repository responses and validating service behavior. These tests can catch logic errors but cannot detect database configuration problems, SQL issues, or JPA mapping errors.
 
-**13.** A teammate argues that because the service tests cover all the logic, there is no
-need to write controller tests. Do you agree? Describe one specific type of bug that a
-controller-level test (using `MockMvc`) would catch that the service tests in this project
-would miss entirely.
+---
 
+### 13.
 
+I do not agree. Controller tests validate request routing, validation behavior, HTTP status codes, request serialization, and response serialization.
 
-**14.** Looking at the tests you wrote in `TransactionCandidateTest.java`: what was the
-first test you wrote, and why did you choose to start there? What does the order in which
-you wrote tests tell you about how you approached the problem?
+For example, a controller test using MockMvc could detect that invalid request payloads are incorrectly accepted because validation annotations are missing. Service tests alone would not catch that issue.
 
+---
 
+### 14.
+
+The first tests I focused on were the failing tests already present in the project because they provided the fastest feedback on broken functionality.
+
+This approach reflects a debugging-first workflow. I prioritized restoring correctness in existing behavior before adding or extending functionality.
 
 ---
 
 ## AI & Modern Engineering
 
-**15.** Describe how you used AI tools during this project. For at least two specific
-examples: what did you prompt the tool with, what did it return, and what did you change
-or reject? Identify one place where the AI output was immediately trustworthy and one
-place where it required meaningful scrutiny before you used it.
+### 15.
+
+I used ChatGPT during development for debugging, investigation, and documentation support.
+
+One example was diagnosing build failures. I shared compilation errors and environment information, and the AI helped identify a Java version mismatch between the project requirements and the Maven runtime. I verified the diagnosis through Maven output before applying changes.
+
+Another example was investigating failing tests. The AI helped interpret test failures and locate defects in monthly spend aggregation and category calculation logic. I reviewed the relevant code manually and validated the fixes through the test suite.
+
+The most trustworthy AI assistance was interpreting build logs and identifying likely root causes. The area requiring the most scrutiny was implementation guidance, where suggestions had to be verified against the actual codebase and assignment requirements before being accepted.
