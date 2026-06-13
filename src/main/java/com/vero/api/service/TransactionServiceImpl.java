@@ -79,7 +79,5 @@ public class TransactionServiceImpl implements TransactionService {
         return BudgetCalculator.getTopSpendingCategories(transactions, topN);
     }
 
-    public List<Transaction> getCategoryTransactionsForMonth(Category category, int year, int month) {
-        return repository.findByCategoryAndMonth(category, year, month);
-    }
+
 }
