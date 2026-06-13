@@ -1,3 +1,4 @@
 com/vero/api/model/Transaction.class
 com/vero/api/model/Category.class
 com/vero/api/repository/TransactionRepository.class
+com/vero/api/model/Transaction$TransactionBuilder.class
