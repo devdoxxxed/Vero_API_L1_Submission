@@ -16,7 +16,7 @@ public final class BudgetCalculator {
     /**
      * Groups the provided transactions by category, sums the total amount spent
      * per category, and returns the top N categories by total spend in descending order.
-     *
+     * <p>
      * The returned map preserves insertion order and contains at most {@code topN} entries.
      * If there are fewer distinct categories than {@code topN}, all categories are returned.
      *
@@ -25,7 +25,23 @@ public final class BudgetCalculator {
      * @return a map of Category to total spend, sorted descending by spend, limited to topN entries
      */
     public static Map<Category, BigDecimal> getTopSpendingCategories(List<Transaction> transactions, int topN) {
-        // TODO: implement
-        return new LinkedHashMap<>();
+
+        return transactions.stream()
+                .collect(java.util.stream.Collectors.groupingBy(
+                        Transaction::getCategory,
+                        java.util.stream.Collectors.reducing(
+                                BigDecimal.ZERO,
+                                Transaction::getAmount,
+                                BigDecimal::add)))
+                .entrySet()
+                .stream()
+                .sorted(Map.Entry.<Category, BigDecimal>comparingByValue().reversed())
+                .limit(topN)
+                .collect(java.util.stream.Collectors.toMap(
+                        Map.Entry::getKey,
+                        Map.Entry::getValue,
+                        (a, b) -> a,
+                        LinkedHashMap::new
+                ));
     }
 }
